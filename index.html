@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VocabFlow — 英文單字語音學習站 (100字庫)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    @keyframes mic-pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+      70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .mic-active-pulse {
+      animation: mic-pulse 1.6s infinite cubic-bezier(0.66, 0, 0, 1);
+    }
+    /* Smooth Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- Compatibility Warning Banner (Hidden if supported) -->
+  <div id="compatBanner" class="hidden bg-amber-500 text-white px-4 py-2.5 text-sm font-medium text-center flex items-center justify-center gap-2 shadow-sm transition-all duration-300">
+    <i class="ph-bold ph-warning text-lg"></i>
+    <span id="compatMessage">偵測到當前瀏覽器可能未完整支援語音辨識（Speech Recognition），建議使用 Google Chrome 或 Microsoft Edge 以獲得完整麥克風口說辨識體驗。</span>
+    <button onclick="document.getElementById('compatBanner').classList.add('hidden')" class="ml-3 text-white/80 hover:text-white">
+      <i class="ph ph-x text-base"></i>
+    </button>
+  </div>
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+          <i class="ph-bold ph-waveform text-xl"></i>
+        </div>
+        <div>
+          <span class="font-extrabold text-lg text-slate-900 tracking-tight">VocabFlow</span>
+          <span class="hidden sm:inline-block text-xs font-semibold px-2 py-0.5 ml-2 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">100 Essential Vocabs</span>
+        </div>
+      </div>
+
+      <!-- Main Tabs -->
+      <nav class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-sm font-semibold">
+        <button id="tabBtnPractice" onclick="switchTab('practice')" class="px-3.5 sm:px-4 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 bg-white text-indigo-700 shadow-sm">
+          <i class="ph-bold ph-microphone"></i>
+          <span>互動練習</span>
+        </button>
+        <button id="tabBtnList" onclick="switchTab('list')" class="px-3.5 sm:px-4 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 text-slate-600 hover:text-slate-900">
+          <i class="ph-bold ph-books"></i>
+          <span>單字總庫 (<span id="totalBadgeCount">100</span>)</span>
+        </button>
+        <button id="tabBtnStats" onclick="switchTab('stats')" class="px-3.5 sm:px-4 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 text-slate-600 hover:text-slate-900">
+          <i class="ph-bold ph-chart-donut"></i>
+          <span>學習報告</span>
+        </button>
+      </nav>
+
+      <!-- Settings / Accent Picker -->
+      <div class="flex items-center gap-2">
+        <select id="voiceAccentSelect" onchange="updateVoiceSettings()" class="bg-slate-50 border border-slate-300 text-slate-700 text-xs sm:text-sm font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+          <option value="en-US">🇺🇸 美式英語 (en-US)</option>
+          <option value="en-GB">🇬🇧 英式英語 (en-GB)</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ==================== VIEW 1: PRACTICE MODE ==================== -->
+    <section id="viewPractice" class="space-y-6">
+      <!-- Quick Control & Stats Bar -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+            <i class="ph-bold ph-lightning"></i>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-slate-500">當前進度</div>
+            <div class="text-lg font-bold text-slate-900"><span id="currentIndexDisplay">1</span> / <span id="totalPracticeDisplay">100</span></div>
+          </div>
+        </div>
+
+        <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
+            <i class="ph-bold ph-check-circle"></i>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-slate-500">累計答對</div>
+            <div class="text-lg font-bold text-emerald-600" id="statCorrectMini">0</div>
+          </div>
+        </div>
+
+        <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center text-xl shrink-0">
+            <i class="ph-bold ph-target"></i>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-slate-500">綜合正確率</div>
+            <div class="text-lg font-bold text-violet-600" id="statAccuracyMini">0%</div>
+          </div>
+        </div>
+
+        <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl shrink-0">
+            <i class="ph-bold ph-flame"></i>
+          </div>
+          <div>
+            <div class="text-xs font-semibold text-slate-500">連對 Streak</div>
+            <div class="text-lg font-bold text-amber-600" id="statStreakMini">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Practice Card -->
+      <div class="bg-white rounded-3xl border border-slate-200/80 shadow-lg p-6 sm:p-10 relative overflow-hidden transition-all duration-300">
+        <!-- Sub Mode Switch -->
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-100">
+          <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+            <button id="modeSpeakingBtn" onclick="setPracticeSubMode('speaking')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white text-indigo-700 shadow-sm">
+              <i class="ph-bold ph-microphone mr-1"></i>口說朗讀模式 (Speaking)
+            </button>
+            <button id="modeListeningBtn" onclick="setPracticeSubMode('listening')" class="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900">
+              <i class="ph-bold ph-headphones mr-1"></i>聽音選字模式 (Listening)
+            </button>
+          </div>
+
+          <!-- Category Badge & Jump -->
+          <div class="flex items-center gap-2">
+            <span id="currentCategoryBadge" class="text-xs font-bold uppercase tracking-wider px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-200">
+              Technology & Science
+            </span>
+            <button onclick="randomizeCard()" title="隨機挑題" class="p-2 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-all">
+              <i class="ph-bold ph-shuffle text-base"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Word Content Area -->
+        <div class="text-center max-w-2xl mx-auto space-y-4">
+          <!-- Shown in Speaking Mode, masked in Listening Mode -->
+          <div id="targetWordContainer" class="space-y-1">
+            <div class="flex items-center justify-center gap-3">
+              <h2 id="cardWord" class="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight">serendipity</h2>
+              <button id="audioSpeakBtn" onclick="playCurrentWordAudio()" class="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center text-xl shadow-sm hover:scale-105 active:scale-95" title="播放發音 (Speech Synthesis)">
+                <i class="ph-bold ph-speaker-high"></i>
+              </button>
+            </div>
+            <div class="flex items-center justify-center gap-2 text-slate-500 font-mono text-sm sm:text-base">
+              <span id="cardPos" class="px-2 py-0.5 rounded bg-slate-100 text-xs font-sans font-bold text-slate-600">noun</span>
+              <span id="cardIpa">/ˌser.ənˈdɪp.ə.t̬i/</span>
+            </div>
+          </div>
+
+          <!-- Mask placeholder for Listening Mode -->
+          <div id="listenMaskContainer" class="hidden py-6">
+            <div class="inline-flex flex-col items-center gap-3">
+              <button onclick="playCurrentWordAudio()" class="w-20 h-20 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 transition-all flex items-center justify-center text-3xl shadow-xl shadow-indigo-300 hover:scale-105 active:scale-95">
+                <i class="ph-fill ph-speaker-high"></i>
+              </button>
+              <p class="text-sm font-semibold text-slate-500">點擊播放發音，並在下方選出正確單字</p>
+            </div>
+          </div>
+
+          <!-- Chinese Meaning & Definition -->
+          <div id="meaningContainer" class="pt-2 pb-1">
+            <div id="cardTranslation" class="text-xl sm:text-2xl font-bold text-indigo-700">意外的驚喜 / 機緣巧合</div>
+            <div id="cardDefinition" class="text-sm text-slate-500 mt-1 max-w-lg mx-auto leading-relaxed">The occurrence and development of events by chance in a happy or beneficial way.</div>
+          </div>
+
+          <!-- Example Sentence Card -->
+          <div class="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-left transition-all">
+            <div class="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+              <span>實用例句 (Example Sentence)</span>
+              <button onclick="playSentenceAudio()" class="hover:text-indigo-600 flex items-center gap-1 font-semibold text-indigo-600 text-xs">
+                <i class="ph-bold ph-play"></i> 唸例句
+              </button>
+            </div>
+            <p id="cardExampleEn" class="text-slate-800 font-medium text-sm sm:text-base leading-snug">Finding this cozy cafe on a rainy afternoon was pure serendipity.</p>
+            <p id="cardExampleZh" class="text-slate-500 text-xs sm:text-sm mt-1">在雨天的午後偶然發現這家舒適的咖啡館，真是一場美麗的機緣巧合。</p>
+          </div>
+
+          <!-- ====== SPEAKING MODE: Speech Recognition ====== -->
+          <div id="speakingInteractionBlock" class="pt-6 space-y-4">
+            <div class="flex flex-col items-center gap-3">
+              <button id="micButton" onclick="handleMicToggle()" class="w-20 h-20 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center text-3xl shadow-xl shadow-indigo-200">
+                <i id="micIcon" class="ph-bold ph-microphone"></i>
+              </button>
+              <div id="stateIndicator" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-600 transition-all">
+                點擊麥克風大聲朗讀此單字
+              </div>
+            </div>
+
+            <!-- Speech Feedback Live Card -->
+            <div id="speechFeedbackBox" class="hidden max-w-md mx-auto bg-slate-50 rounded-2xl p-4 border border-slate-200 transition-all text-left">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-400 mb-1">
+                <span>辨識結果 (Transcription)</span>
+                <span id="similarityPill" class="px-2 py-0.5 rounded-md text-xs font-bold bg-slate-200 text-slate-700">相似度: 0%</span>
+              </div>
+              <div id="transcribedResultText" class="text-lg font-bold text-slate-800">"..."</div>
+              <div id="verdictDetailText" class="text-xs text-slate-500 mt-1">等待語音輸入...</div>
+            </div>
+          </div>
+
+          <!-- ====== LISTENING MODE: Multiple Choice ====== -->
+          <div id="listeningInteractionBlock" class="hidden pt-6 space-y-4">
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">請選擇聽到的正確單字或片語</div>
+            <div id="listenChoicesGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
+              <!-- Choices inserted via JS -->
+            </div>
+            <div id="listenVerdictBox" class="hidden text-sm font-bold text-center py-2"></div>
+          </div>
+        </div>
+
+        <!-- Bottom Navigation Controls -->
+        <div class="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between">
+          <button onclick="navigateCard(-1)" class="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold flex items-center gap-1.5 transition-all">
+            <i class="ph-bold ph-caret-left"></i> 上一個
+          </button>
+          
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400 font-medium hidden sm:inline">鍵盤快速鍵: [空白鍵] 唸單字 | [Enter] 下一題</span>
+          </div>
+
+          <button onclick="navigateCard(1)" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-100">
+            下一個 <i class="ph-bold ph-caret-right"></i>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: VOCABULARY LIST (100 ITEMS) ==================== -->
+    <section id="viewList" class="hidden space-y-6">
+      <!-- Search and Filter Bar -->
+      <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="relative w-full md:w-80">
+          <i class="ph-bold ph-magnifying-glass absolute left-3.5 top-3 text-slate-400"></i>
+          <input type="text" id="vocabSearchInput" oninput="filterVocabList()" placeholder="搜尋英文、中文、片語或詞性..." class="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all">
+        </div>
+
+        <!-- Filter Pill Tabs -->
+        <div class="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+          <button onclick="setListCategoryFilter('ALL')" class="category-pill active-cat px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white" data-cat="ALL">全部 (100)</button>
+          <button onclick="setListCategoryFilter('Everyday Life')" class="category-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200" data-cat="Everyday Life">生活與社交</button>
+          <button onclick="setListCategoryFilter('Business & Career')" class="category-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200" data-cat="Business & Career">職場與商業</button>
+          <button onclick="setListCategoryFilter('Tech & Science')" class="category-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200" data-cat="Tech & Science">科技與數位</button>
+          <button onclick="setListCategoryFilter('Idioms & Expressions')" class="category-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200" data-cat="Idioms & Expressions">高頻片語成語</button>
+        </div>
+      </div>
+
+      <!-- Vocab Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <th class="py-3 px-4 w-12 text-center">#</th>
+                <th class="py-3 px-4">單字 / 片語 (Word/Phrase)</th>
+                <th class="py-3 px-4">音標 (IPA)</th>
+                <th class="py-3 px-4">中文釋義 (Definition)</th>
+                <th class="py-3 px-4 hidden lg:table-cell">實用例句 (Example)</th>
+                <th class="py-3 px-4 text-center">發音與練習</th>
+              </tr>
+            </thead>
+            <tbody id="vocabTableBody" class="divide-y divide-slate-100">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+        <div id="noResultsNotice" class="hidden p-12 text-center text-slate-400">
+          <i class="ph-bold ph-file-search text-4xl mb-2"></i>
+          <p>找不到符合條件的單字或片語</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: PRACTICE REPORT & STATS ==================== -->
+    <section id="viewStats" class="hidden space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">總練習次數</span>
+          <div class="text-3xl font-extrabold text-slate-900 mt-2" id="statReportTotal">0</div>
+          <span class="text-xs text-slate-500 mt-1 inline-block">包含朗讀與聽力測驗</span>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider">答對次數</span>
+          <div class="text-3xl font-extrabold text-emerald-600 mt-2" id="statReportCorrect">0</div>
+          <span class="text-xs text-slate-500 mt-1 inline-block">辨識通過或選詞正確</span>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <span class="text-xs font-bold text-rose-500 uppercase tracking-wider">待加強次數</span>
+          <div class="text-3xl font-extrabold text-rose-500 mt-2" id="statReportIncorrect">0</div>
+          <span class="text-xs text-slate-500 mt-1 inline-block">需重新複習掌握發音</span>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">整體正確率</span>
+          <div class="text-3xl font-extrabold text-indigo-600 mt-2" id="statReportAccuracy">0%</div>
+          <span class="text-xs text-slate-500 mt-1 inline-block">持續練習以突破 85%</span>
+        </div>
+      </div>
+
+      <!-- Action & Reset -->
+      <div class="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="text-sm font-bold text-slate-700">最近練習紀錄明細 (即時儲存於本機 LocalStorage)</div>
+        <button onclick="resetStatsHistory()" class="px-3.5 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-all flex items-center gap-1.5">
+          <i class="ph-bold ph-trash"></i> 重置所有紀錄
+        </button>
+      </div>
+
+      <!-- History List Table -->
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto max-h-96">
+          <table class="w-full text-left text-sm border-collapse">
+            <thead class="sticky top-0 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
+              <tr>
+                <th class="py-3 px-4">時間</th>
+                <th class="py-3 px-4">模式</th>
+                <th class="py-3 px-4">目標單字</th>
+                <th class="py-3 px-4">語音辨識 / 填答</th>
+                <th class="py-3 px-4">相似度</th>
+                <th class="py-3 px-4 text-center">判定結果</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody" class="divide-y divide-slate-100">
+              <!-- Dynamically populated history -->
+            </tbody>
+          </table>
+        </div>
+        <div id="noHistoryNotice" class="p-8 text-center text-slate-400 text-sm">
+          目前尚無練習紀錄，點擊上方「互動練習」開始口說或聽力測驗吧！
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="mt-auto border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-500">
+    <p>VocabFlow — Web Speech API 語音合成 (TTS) 與 語音辨識 (STT) 容錯練習系統 &bull; 內建 100 筆高頻單字片語</p>
+  </footer>
+
+  <!-- Modal / Floating Message Box -->
+  <div id="appModal" class="hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+      <div id="modalIconContainer" class="w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl">
+        <i id="modalIcon" class="ph-bold ph-info"></i>
+      </div>
+      <h3 id="modalTitle" class="text-lg font-bold text-slate-900">提示</h3>
+      <p id="modalMsg" class="text-sm text-slate-600 leading-relaxed"></p>
+      <button onclick="closeModal()" class="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-all">我知道了</button>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT LOGIC ==================== -->
+  <script>
+    /* =====================================================================
+       1. DATA SOURCE: EXACTLY 100 WORDS & IDIOMATIC EXPRESSIONS
+       ===================================================================== */
+    const VOCABULARY_DATA = [
+      // 1-25: Everyday Life & Social (生活與社交)
+      { id: 1, word: "serendipity", pos: "noun", ipa: "/ˌser.ənˈdɪp.ə.t̬i/", zh: "意外的驚喜 / 機緣巧合", category: "Everyday Life", def: "The occurrence of events by chance in a happy or beneficial way.", exampleEn: "Finding this cozy cafe on a rainy afternoon was pure serendipity.", exampleZh: "在雨天的午後偶然發現這家舒適的咖啡館，真是一場美麗的機緣巧合。" },
+      { id: 2, word: "resilience", pos: "noun", ipa: "/rɪˈzɪl.jəns/", zh: "韌性 / 復原力", category: "Everyday Life", def: "The capacity to recover quickly from difficulties; toughness.", exampleEn: "He showed great resilience after losing his job.", exampleZh: "他在失業後展現了極大的韌性與復原力。" },
+      { id: 3, word: "empathy", pos: "noun", ipa: "/ˈem.pə.θi/", zh: "同理心 / 感同身受", category: "Everyday Life", def: "The ability to understand and share the feelings of another.", exampleEn: "Active listening requires genuine empathy.", exampleZh: "積極傾聽需要真誠的同理心。" },
+      { id: 4, word: "spontaneous", pos: "adj.", ipa: "/spɑːnˈteɪ.ni.əs/", zh: "自發的 / 一時興起的", category: "Everyday Life", def: "Performed or occurring as a result of a sudden inner impulse.", exampleEn: "We took a spontaneous road trip over the weekend.", exampleZh: "我們週末來了一場說走就走的公路旅行。" },
+      { id: 5, word: "procrastinate", pos: "verb", ipa: "/proʊˈkræs.tə.neɪt/", zh: "拖延 / 延宕", category: "Everyday Life", def: "Delay or postpone action; put off doing something.", exampleEn: "Don't procrastinate on preparing for your exam.", exampleZh: "不要拖延準備考試的時間。" },
+      { id: 6, word: "authentic", pos: "adj.", ipa: "/ɑːˈθen.t̬ɪk/", zh: "真實的 / 道地的", category: "Everyday Life", def: "Of undisputed origin; genuine and true to oneself.", exampleEn: "This restaurant serves authentic Italian pizza.", exampleZh: "這家餐廳供應正宗道地的義大利披薩。" },
+      { id: 7, word: "vulnerable", pos: "adj.", ipa: "/ˈvʌl.nɚ.ə.bəl/", zh: "脆弱的 / 易受傷的", category: "Everyday Life", def: "Exposed to the possibility of being attacked or harmed.", exampleEn: "It takes courage to be emotionally vulnerable.", exampleZh: "展現情感上的脆弱需要勇氣。" },
+      { id: 8, word: "gratitude", pos: "noun", ipa: "/ˈɡræt̬.ə.tuːd/", zh: "感恩 / 謝意", category: "Everyday Life", def: "The quality of being thankful; readiness to show appreciation.", exampleEn: "Expressing daily gratitude improves mental well-being.", exampleZh: "每天表達感恩有助於心理健康。" },
+      { id: 9, word: "wholesome", pos: "adj.", ipa: "/ˈhoʊl.səm/", zh: "有益健康的 / 溫馨正向的", category: "Everyday Life", def: "Conducive to physical or moral well-being.", exampleEn: "It was a wholesome family comedy movie.", exampleZh: "這是一部溫馨健康的家庭喜劇電影。" },
+      { id: 10, word: "nostalgia", pos: "noun", ipa: "/nɑːˈstæl.dʒə/", zh: "懷舊 / 懷念之情", category: "Everyday Life", def: "A sentimental longing for the happiness felt in a former time.", exampleEn: "Listening to 90s songs fills me with nostalgia.", exampleZh: "聽90年代的歌曲讓我心中充滿懷舊之情。" },
+      { id: 11, word: "meticulous", pos: "adj.", ipa: "/məˈtɪk.jə.ləs/", zh: "細緻嚴謹的 / 一絲不苟的", category: "Everyday Life", def: "Showing great attention to detail; very careful and precise.", exampleEn: "She is meticulous about keeping her room tidy.", exampleZh: "她對維持房間整潔十分一絲不苟。" },
+      { id: 12, word: "compassion", pos: "noun", ipa: "/kəmˈpæʃ.ən/", zh: "同情 / 憐憫慈悲", category: "Everyday Life", def: "Sympathetic pity and concern for the sufferings of others.", exampleEn: "Volunteers treat patients with utmost compassion.", exampleZh: "志工們以極大的同理與慈悲心對待病患。" },
+      { id: 13, word: "hesitate", pos: "verb", ipa: "/ˈhez.ə.teɪt/", zh: "猶豫 / 遲疑", category: "Everyday Life", def: "Pause before saying or doing something through uncertainty.", exampleEn: "Do not hesitate to reach out if you need assistance.", exampleZh: "如果您需要協助，請毫不猶豫地與我們聯繫。" },
+      { id: 14, word: "optimistic", pos: "adj.", ipa: "/ˌɑːp.təˈmɪs.tɪk/", zh: "樂觀的", category: "Everyday Life", def: "Hopeful and confident about the future.", exampleEn: "Despite hardships, she remained optimistic.", exampleZh: "儘管生活艱難，她依然保持樂觀。" },
+      { id: 15, word: "patience", pos: "noun", ipa: "/ˈpeɪ.ʃəns/", zh: "耐心 / 忍耐力", category: "Everyday Life", def: "The capacity to accept delay or trouble without getting angry.", exampleEn: "Teaching young kids requires immense patience.", exampleZh: "教導幼童需要極大的耐心。" },
+      { id: 16, word: "curiosity", pos: "noun", ipa: "/ˌkjʊr.iˈɑː.sə.t̬i/", zh: "好奇心", category: "Everyday Life", def: "A strong desire to know or learn something.", exampleEn: "Children explore the universe with pure curiosity.", exampleZh: "孩子們帶著純粹的好奇心探索世界。" },
+      { id: 17, word: "boundary", pos: "noun", ipa: "/ˈbaʊn.dər.i/", zh: "界線 / 界限", category: "Everyday Life", def: "A limit of something abstract, such as personal space.", exampleEn: "Setting clear work-life boundaries is essential.", exampleZh: "劃清工作與生活界限至關重要。" },
+      { id: 18, word: "generous", pos: "adj.", ipa: "/ˈdʒen.ər.əs/", zh: "慷慨大方的", category: "Everyday Life", def: "Showing a readiness to give more of something than is strictly necessary.", exampleEn: "He made a generous donation to the animal shelter.", exampleZh: "他向動物收容所捐贈了一筆慷慨的善款。" },
+      { id: 19, word: "mindfulness", pos: "noun", ipa: "/ˈmaɪnd.fəl.nəs/", zh: "正念 / 專注當下", category: "Everyday Life", def: "A mental state achieved by focusing awareness on the present moment.", exampleEn: "Mindfulness meditation helps reduce daily stress.", exampleZh: "正念冥想有助於減輕日常壓力。" },
+      { id: 20, word: "enthusiasm", pos: "noun", ipa: "/ɪnˈθuː.zi.æz.əm/", zh: "熱情 / 熱忱", category: "Everyday Life", def: "Intense and eager enjoyment, interest, or approval.", exampleEn: "Her enthusiasm for learning languages is infectious.", exampleZh: "她對學習語言的熱情非常具感染力。" },
+      { id: 21, word: "solitude", pos: "noun", ipa: "/ˈsɑː.lə.tuːd/", zh: "獨處 / 獨居之境", category: "Everyday Life", def: "The state or situation of being alone, often peacefully.", exampleEn: "He enjoyed the tranquil solitude of the cabin.", exampleZh: "他很享受小木屋裡寧靜的獨處時光。" },
+      { id: 22, word: "harmonious", pos: "adj.", ipa: "/hɑːrˈmoʊ.ni.əs/", zh: "和諧融洽的", category: "Everyday Life", def: "Forming a pleasing or consistent whole; free from disagreement.", exampleEn: "They built a harmonious relationship over the years.", exampleZh: "這些年來他們建立了和睦融洽的關係。" },
+      { id: 23, word: "gratify", pos: "verb", ipa: "/ˈɡræt̬.ə.faɪ/", zh: "使滿意 / 滿足", category: "Everyday Life", def: "Give someone pleasure or satisfaction.", exampleEn: "It gratifies me to see my students thrive.", exampleZh: "看見學生們茁壯成長讓我深感欣慰。" },
+      { id: 24, word: "compromise", pos: "noun/verb", ipa: "/ˈkɑːm.prə.maɪz/", zh: "妥協 / 折衷", category: "Everyday Life", def: "An agreement reached by each side making concessions.", exampleEn: "Both roommates reached a compromise on cleaning duties.", exampleZh: "兩位室友在打掃分工上達成了折衷協議。" },
+      { id: 25, word: "appreciate", pos: "verb", ipa: "/əˈpriː.ʃi.eɪt/", zh: "感激 / 欣賞", category: "Everyday Life", def: "Recognize the full worth of; be grateful for.", exampleEn: "I truly appreciate your thoughtful support.", exampleZh: "我真心感激你貼心的支持。" },
+
+      // 26-50: Business & Career (職場與商業)
+      { id: 26, word: "synergy", pos: "noun", ipa: "/ˈsɪn.ɚ.dʒi/", zh: "綜效 / 協同效應", category: "Business & Career", def: "Interaction producing a combined effect greater than the sum of separate effects.", exampleEn: "The corporate merger created tremendous synergy.", exampleZh: "這場企業合併創造了巨大的協同效應。" },
+      { id: 27, word: "leverage", pos: "verb/noun", ipa: "/ˈlev.ɚ.ɪdʒ/", zh: "槓桿運用 / 善用資源", category: "Business & Career", def: "Use something to maximum advantage.", exampleEn: "We must leverage customer feedback to refine the product.", exampleZh: "我們必須善用客戶回饋來精進產品。" },
+      { id: 28, word: "milestone", pos: "noun", ipa: "/ˈmaɪl.stoʊn/", zh: "里程碑 / 重大進展", category: "Business & Career", def: "A significant stage or event in the development of something.", exampleEn: "Surpassing one million users was a proud milestone.", exampleZh: "突破一百萬用戶是一座令人驕傲的里程碑。" },
+      { id: 29, word: "streamline", pos: "verb", ipa: "/ˈstriːm.laɪn/", zh: "精簡流程 / 提高效率", category: "Business & Career", def: "Make an organization or system more efficient by employing faster methods.", exampleEn: "We streamlined our hiring workflow using automation.", exampleZh: "我們透過自動化精簡了招募審核流程。" },
+      { id: 30, word: "stakeholder", pos: "noun", ipa: "/ˈsteɪkˌhoʊl.dɚ/", zh: "利害關係人 / 投資人", category: "Business & Career", def: "A person with an interest or concern in something, especially a business.", exampleEn: "We must communicate transparently with key stakeholders.", exampleZh: "我們必須與關鍵利害關係人進行透明溝通。" },
+      { id: 31, word: "bottleneck", pos: "noun", ipa: "/ˈbɑː.t̬əl.nek/", zh: "瓶頸 / 阻礙點", category: "Business & Career", def: "A situation that causes delay in a process or system.", exampleEn: "Manual data entry proved to be the production bottleneck.", exampleZh: "人工資料輸入被證實是整個生產流程的瓶頸所在。" },
+      { id: 32, word: "benchmark", pos: "noun/verb", ipa: "/ˈbentʃ.mɑːrk/", zh: "基準 / 標竿評測", category: "Business & Career", def: "A standard against which other things can be compared.", exampleEn: "Their customer retention rate is an industry benchmark.", exampleZh: "他們的顧客留存率是業界的標竿水準。" },
+      { id: 33, word: "feasibility", pos: "noun", ipa: "/ˌfiː.zəˈbɪl.ə.t̬i/", zh: "可行性", category: "Business & Career", def: "The state or degree of being easily or conveniently done.", exampleEn: "The engineering team conducted a feasibility study.", exampleZh: "工程團隊針對此構想進行了可行性研究。" },
+      { id: 34, word: "pivot", pos: "verb/noun", ipa: "/ˈpɪv.ət/", zh: "策略轉向 / 樞紐轉換", category: "Business & Career", def: "Shift strategy or product direction in response to market feedback.", exampleEn: "The startup pivoted from e-commerce to SaaS.", exampleZh: "這家新創團隊從電商轉向了軟體即服務 (SaaS)。" },
+      { id: 35, word: "bandwidth", pos: "noun", ipa: "/ˈbænd.wɪdθ/", zh: "心力 / 處理能力 (職場比喻)", category: "Business & Career", def: "Mental capacity or time required to deal with situations.", exampleEn: "I don't have the bandwidth to take on extra projects this week.", exampleZh: "我這週沒有足夠的心力承接額外的專案。" },
+      { id: 36, word: "deliverable", pos: "noun", ipa: "/dɪˈlɪv.ɚ.ə.bəl/", zh: "交付項目 / 成果成品", category: "Business & Career", def: "A thing able to be provided, especially as a product of a development process.", exampleEn: "The final deliverable is due this Friday.", exampleZh: "最終交付成品預計於本週五截止前繳交。" },
+      { id: 37, word: "incentive", pos: "noun", ipa: "/ɪnˈsen.t̬ɪv/", zh: "激勵措施 / 誘因", category: "Business & Career", def: "A thing that motivates or encourages someone to do something.", exampleEn: "Performance bonuses provide strong sales incentives.", exampleZh: "績效獎金能為銷售團隊提供強大的激勵誘因。" },
+      { id: 38, word: "accountability", pos: "noun", ipa: "/əˌkaʊn.t̬əˈbɪl.ə.t̬i/", zh: "當責 / 負責到底的態度", category: "Business & Career", def: "The condition of being responsible and answerable for results.", exampleEn: "Leadership demands high transparency and accountability.", exampleZh: "領導力講求高度透明與成果當責。" },
+      { id: 39, word: "alignment", pos: "noun", ipa: "/əˈlaɪn.mənt/", zh: "共識齊步 / 目標一致性", category: "Business & Career", def: "Arrangement in a straight line, or appropriate positioning in agreement.", exampleEn: "Ensure cross-functional alignment before product launch.", exampleZh: "在產品發布前務必確認跨部門目標達成共識齊步。" },
+      { id: 40, word: "scalable", pos: "adj.", ipa: "/ˈskeɪ.lə.bəl/", zh: "可規模化的 / 可擴充的", category: "Business & Career", def: "Able to be changed in size or scale, especially growing without proportional costs.", exampleEn: "Cloud architecture makes web apps easily scalable.", exampleZh: "雲端架構讓網頁應用程式能輕鬆擴大規模。" },
+      { id: 41, word: "retention", pos: "noun", ipa: "/rɪˈten.ʃən/", zh: "留存率 / 保持力", category: "Business & Career", def: "The continued use, existence, or keeping of someone or something.", exampleEn: "Employee retention improved after implementing remote work.", exampleZh: "實施遠距工作制度後，員工留任率大幅提高。" },
+      { id: 42, word: "traction", pos: "noun", ipa: "/ˈtræk.ʃən/", zh: "市場吸睛度 / 業務動能", category: "Business & Career", def: "The extent to which an idea or product gains popularity or acceptance.", exampleEn: "The mobile app is gaining solid traction in Asia.", exampleZh: "這款手機應用程式在亞洲市場正取得扎實的業務動能。" },
+      { id: 43, word: "compliance", pos: "noun", ipa: "/kəmˈplaɪ.əns/", zh: "法規遵循 / 合規性", category: "Business & Career", def: "The action of complying with a wish or command, or legal standards.", exampleEn: "The audit confirmed full regulatory compliance.", exampleZh: "稽核證實公司完全符合法規規範。" },
+      { id: 44, word: "turnover", pos: "noun", ipa: "/ˈtɝːnˌoʊ.vɚ/", zh: "流動率 / 營業額", category: "Business & Career", def: "The rate at which employees leave and are replaced.", exampleEn: "High staff turnover disrupts company momentum.", exampleZh: "高員工流動率會中斷公司的成長動能。" },
+      { id: 45, word: "acquisition", pos: "noun", ipa: "/ˌæk.wəˈzɪʃ.ən/", zh: "收購 / 用戶獲取", category: "Business & Career", def: "An asset or object bought or obtained, typically by a company.", exampleEn: "Customer acquisition cost is a key startup metric.", exampleZh: "顧客獲取成本 (CAC) 是新創公司的核心指標。" },
+      { id: 46, word: "diversify", pos: "verb", ipa: "/daɪˈvɝː.sə.faɪ/", zh: "使多樣化 / 分散投資", category: "Business & Career", def: "Make or become more varied.", exampleEn: "Investors should diversify their asset portfolios.", exampleZh: "投資人應將資產配置多元化分散風險。" },
+      { id: 47, word: "optimize", pos: "verb", ipa: "/ˈɑːp.tə.maɪz/", zh: "最佳化 / 優化", category: "Business & Career", def: "Make the best or most effective use of a situation or resource.", exampleEn: "We optimized landing page conversion rates.", exampleZh: "我們優化了到達頁面的轉換率。" },
+      { id: 48, word: "agenda", pos: "noun", ipa: "/əˈdʒen.də/", zh: "會議議程 / 待辦清單", category: "Business & Career", def: "A list of items to be discussed at a formal meeting.", exampleEn: "Let's review the meeting agenda before starting.", exampleZh: "開始會議前我們先過一遍議程。" },
+      { id: 49, word: "protocol", pos: "noun", ipa: "/ˈproʊ.t̬ə.kɑːl/", zh: "規範協議 / 標準作業流程", category: "Business & Career", def: "The official procedure or system of rules governing affairs.", exampleEn: "Safety protocols must be strictly adhered to.", exampleZh: "安全規範條例必須嚴格遵守。" },
+      { id: 50, word: "consortium", pos: "noun", ipa: "/kənˈsɔːr.ti.əm/", zh: "企業聯盟 / 聯貸集團", category: "Business & Career", def: "An association of several business companies or banks.", exampleEn: "A global consortium was formed to build the satellite.", exampleZh: "數家跨國企業組成聯盟以共同建造衛星。" },
+
+      // 51-75: Technology & Science (科技與數位)
+      { id: 51, word: "paradigm shift", pos: "phrase", ipa: "/ˈpær.ə.daɪm ʃɪft/", zh: "典範轉移 / 觀念顛覆", category: "Tech & Science", def: "A fundamental change in approach or underlying assumptions.", exampleEn: "Generative AI triggers a true paradigm shift.", exampleZh: "生成式 AI 引發了貨真價實的思維典範轉移。" },
+      { id: 52, word: "algorithm", pos: "noun", ipa: "/ˈæl.ɡə.rɪ.ðəm/", zh: "演算法", category: "Tech & Science", def: "A process or set of rules to be followed in calculations.", exampleEn: "The recommendation algorithm tailors content accurately.", exampleZh: "推薦演算法能精準客製化個人內容。" },
+      { id: 53, word: "autonomous", pos: "adj.", ipa: "/ɑːˈtɑː.nə.məs/", zh: "自主的 / 自動駕駛的", category: "Tech & Science", def: "Acting independently or having the freedom to do so.", exampleEn: "Autonomous electric vehicles are cruising highways.", exampleZh: "自動駕駛電動車正在高速公路上巡弋。" },
+      { id: 54, word: "cryptography", pos: "noun", ipa: "/krɪpˈtɑː.ɡrə.fi/", zh: "密碼學 / 加密技術", category: "Tech & Science", def: "The art of writing or solving codes to protect communication.", exampleEn: "End-to-end encryption relies on advanced cryptography.", exampleZh: "端對端加密高度仰賴先進的密碼學技術。" },
+      { id: 55, word: "latency", pos: "noun", ipa: "/ˈleɪ.tən.si/", zh: "延遲時間 / 滯後度", category: "Tech & Science", def: "The delay before a transfer of data begins following an instruction.", exampleEn: "5G networks boast ultra-low data transmission latency.", exampleZh: "5G 網路具備超低資料傳輸延遲的優勢。" },
+      { id: 56, word: "sustainability", pos: "noun", ipa: "/səˌsteɪ.nəˈbɪl.ə.t̬i/", zh: "永續性 / 可持續發展", category: "Tech & Science", def: "Avoidance of the depletion of natural resources to maintain balance.", exampleEn: "Clean solar energy promotes long-term sustainability.", exampleZh: "純淨太陽能促進了長遠的環境永續性。" },
+      { id: 57, word: "cybersecurity", pos: "noun", ipa: "/ˌsaɪ.bɚ.səˈkjʊr.ə.t̬i/", zh: "資訊安全 / 網路資安", category: "Tech & Science", def: "The state of being protected against the criminal use of electronic data.", exampleEn: "Enterprises invest heavily in robust cybersecurity defense.", exampleZh: "各企業投入鉅資打造穩固的資訊安全防禦。" },
+      { id: 58, word: "biotechnology", pos: "noun", ipa: "/ˌbaɪ.oʊ.tekˈnɑː.lə.dʒi/", zh: "生物科技", category: "Tech & Science", def: "The exploitation of biological processes for industrial purposes.", exampleEn: "Biotechnology helps cultivate climate-resilient crops.", exampleZh: "生物科技有助於培育抗氣候逆境的作物。" },
+      { id: 59, word: "quantum", pos: "noun/adj.", ipa: "/ˈkwɑːn.təm/", zh: "量子的 / 飛躍式的", category: "Tech & Science", def: "A discrete quantity of energy, or a massive jump in capability.", exampleEn: "Quantum computing solves complex calculations in seconds.", exampleZh: "量子運算能在數秒內解開龐大複雜的計算。" },
+      { id: 60, word: "interface", pos: "noun", ipa: "/ˈɪn.t̬ɚ.feɪs/", zh: "介面 / 介接窗口", category: "Tech & Science", def: "A point where two systems, subjects, or organizations interact.", exampleEn: "The mobile app boasts an intuitive user interface.", exampleZh: "這款手機應用程式擁有十分直覺的使用者介面。" },
+      { id: 61, word: "hypothesis", pos: "noun", ipa: "/haɪˈpɑː.θə.sɪs/", zh: "科學假說 / 假設", category: "Tech & Science", def: "A proposed explanation made as a starting point for further investigation.", exampleEn: "The experiments confirmed our initial research hypothesis.", exampleZh: "實驗印證了我們最初的研究假說。" },
+      { id: 62, word: "infrastructure", pos: "noun", ipa: "/ˈɪn.frəˌstrʌk.tʃɚ/", zh: "基礎建設 / 軟硬體底層架構", category: "Tech & Science", def: "The basic physical and organizational structures needed for operation.", exampleEn: "High-speed broadband is vital digital infrastructure.", exampleZh: "高速寬頻是極為關鍵的數位基礎建設。" },
+      { id: 63, word: "neural network", pos: "phrase", ipa: "/ˈnʊr.əl ˈnet.wɝːk/", zh: "神經網路", category: "Tech & Science", def: "A computer system modeled on the human brain and nervous system.", exampleEn: "Deep neural networks drive facial recognition tech.", exampleZh: "深度神經網路驅動著當前的人臉辨識科技。" },
+      { id: 64, word: "synthesis", pos: "noun", ipa: "/ˈsɪn.θə.sɪs/", zh: "綜合 / 合成", category: "Tech & Science", def: "The combination of ideas or components to form a theory or system.", exampleEn: "Text-to-speech synthesis converts scripts into audio.", exampleZh: "語音合成 (TTS) 能將文字轉換為自然的發音音訊。" },
+      { id: 65, word: "telemetry", pos: "noun", ipa: "/təˈlem.ə.tri/", zh: "遙測數據 / 遠端監測", category: "Tech & Science", def: "The process of recording and transmitting the readings of an instrument.", exampleEn: "Rocket flight telemetry was tracked without interruption.", exampleZh: "火箭升空遙測數據受到了無間斷的全程追蹤。" },
+      { id: 66, word: "bandwidth", pos: "noun", ipa: "/ˈbænd.wɪdθ/", zh: "網路頻寬", category: "Tech & Science", def: "The maximum amount of data transmitted over an internet connection.", exampleEn: "Streaming 4K video consumes significant bandwidth.", exampleZh: "串流 4K 高畫質影片會消耗大量網路頻寬。" },
+      { id: 67, word: "obsolete", pos: "adj.", ipa: "/ˌɑːb.səˈliːt/", zh: "過時淘汰的", category: "Tech & Science", def: "No longer produced or used; out of date.", exampleEn: "Floppy disks became completely obsolete decades ago.", exampleZh: "磁碟片在數十年前就已徹底被市場淘汰。" },
+      { id: 68, word: "prototype", pos: "noun", ipa: "/ˈproʊ.t̬ə.taɪp/", zh: "原型機 / 雛形", category: "Tech & Science", def: "A first or preliminary model of something from which others are developed.", exampleEn: "Engineers built a working hardware prototype.", exampleZh: "工程師們打造出了一台能正常運作的硬體原型機。" },
+      { id: 69, word: "computational", pos: "adj.", ipa: "/ˌkɑːm.pjəˈteɪ.ʃən.əl/", zh: "計算的 / 運算相關的", category: "Tech & Science", def: "Involving the calculation or use of computers.", exampleEn: "Computational linguistics bridges human language and code.", exampleZh: "計算語言學搭建起了人類自然語言與程式碼之間的橋樑。" },
+      { id: 70, word: "parameter", pos: "noun", ipa: "/pəˈræm.ə.t̬ɚ/", zh: "參數 / 限制條件", category: "Tech & Science", def: "A numerical or other measurable factor forming a set defining a system.", exampleEn: "LLMs require billions of parameters to comprehend nuances.", exampleZh: "大型語言模型需要數百億個參數來理解語意細節。" },
+      { id: 71, word: "heuristic", pos: "adj./noun", ipa: "/hjuːˈrɪs.tɪk/", zh: "啟發式的 / 經驗法則", category: "Tech & Science", def: "Enabling a person to discover or learn something for themselves through trial.", exampleEn: "Heuristic search speeds up finding approximate solutions.", exampleZh: "啟發式搜尋能加速找到最佳近似解。" },
+      { id: 72, word: "throughput", pos: "noun", ipa: "/ˈθruː.pʊt/", zh: "產出量 / 吞吐量", category: "Tech & Science", def: "The amount of material or items passing through a system or process.", exampleEn: "The data pipeline achieved impressive throughput.", exampleZh: "該資料處理管線達成了令人驚豔的高吞吐量。" },
+      { id: 73, word: "vulnerability", pos: "noun", ipa: "/ˌvʌl.nɚ.əˈbɪl.ə.t̬i/", zh: "系統漏洞 / 弱點", category: "Tech & Science", def: "A flaw in software that can be exploited by hackers.", exampleEn: "The patch fixes a critical zero-day vulnerability.", exampleZh: "該更新修補程式修復了一項重大的零日系統漏洞。" },
+      { id: 74, word: "simulate", pos: "verb", ipa: "/ˈsɪm.jə.leɪt/", zh: "模擬 / 仿真", category: "Tech & Science", def: "Imitate the appearance or character of a real condition.", exampleEn: "Software simulations predicted aerodynamic wind resistance.", exampleZh: "軟體模擬預測了空氣動力學中的風阻情況。" },
+      { id: 75, word: "automation", pos: "noun", ipa: "/ˌɑː.t̬əˈmeɪ.ʃən/", zh: "自動化", category: "Tech & Science", def: "The use of largely automatic equipment in a facility or process.", exampleEn: "Factory automation increased quarterly yield substantially.", exampleZh: "工廠自動化顯著提升了每季的產出良率。" },
+
+      // 76-100: Idiomatic Expressions & High-Frequency Phrases (實用片語成語)
+      { id: 76, word: "hit the ground running", pos: "phrase", ipa: "/hɪt ðə ɡraʊnd ˈrʌn.ɪŋ/", zh: "立即進入狀況全力展開", category: "Idioms & Expressions", def: "Start something and proceed quickly without delay or initial difficulty.", exampleEn: "She joined the team and hit the ground running.", exampleZh: "她一加入團隊就迅速進入狀況並火力全開。" },
+      { id: 77, word: "think outside the box", pos: "phrase", ipa: "/θɪŋk ˌaʊtˈsaɪd ðə bɑːks/", zh: "跳脫框架思考 / 破框創新", category: "Idioms & Expressions", def: "Think creatively and unconventionally.", exampleEn: "To solve this crisis, we must think outside the box.", exampleZh: "要化解這場危機，我們必須跳脫既有的思考框架。" },
+      { id: 78, word: "on the same page", pos: "phrase", ipa: "/ɑːn ðə seɪm peɪdʒ/", zh: "達成共識 / 步調一致", category: "Idioms & Expressions", def: "Thinking in a similar way and in agreement with one another.", exampleEn: "Let's align during the huddle so everyone is on the same page.", exampleZh: "我們在晨會對一下，確保大家步調一致。" },
+      { id: 79, word: "bite the bullet", pos: "phrase", ipa: "/baɪt ðə ˈbʊl.ɪt/", zh: "咬緊牙關硬著頭皮做", category: "Idioms & Expressions", def: "Face a difficult situation with courage and stoicism.", exampleEn: "I decided to bite the bullet and resign from that toxic job.", exampleZh: "我決定咬緊牙關硬著頭皮從那份有毒的工作離職。" },
+      { id: 80, word: "back to the drawing board", pos: "phrase", ipa: "/bæk tuː ðə ˈdrɑː.ɪŋ bɔːrd/", zh: "重起爐灶 / 從頭規劃", category: "Idioms & Expressions", def: "Start over again after a previous plan or attempt failed.", exampleEn: "The proposal was rejected, so it's back to the drawing board.", exampleZh: "企劃案被否決了，我們只得重新從頭再來。" },
+      { id: 81, word: "burn the midnight oil", pos: "phrase", ipa: "/bɝːn ðə ˈmɪd.naɪt ɔɪl/", zh: "熬夜苦讀 / 開夜車", category: "Idioms & Expressions", def: "Work or study late into the night.", exampleEn: "College students often burn the midnight oil before finals.", exampleZh: "大學生在期末考前常常熬夜開夜車。" },
+      { id: 82, word: "cut corners", pos: "phrase", ipa: "/kʌt ˈkɔːr.nɚz/", zh: "偷工減料 / 圖省事", category: "Idioms & Expressions", def: "Do something perfunctorily in order to save time or money.", exampleEn: "Never cut corners when it comes to structural safety.", exampleZh: "凡牽涉到建築結構安全，絕不可偷工減料。" },
+      { id: 83, word: "touch base", pos: "phrase", ipa: "/tʌtʃ beɪs/", zh: "接洽聯繫 / 簡短通話了解進度", category: "Idioms & Expressions", def: "Briefly make contact or update someone.", exampleEn: "I will touch base with you tomorrow afternoon.", exampleZh: "我明天下午會跟你簡短聯繫確認一下進度。" },
+      { id: 84, word: "play devil's advocate", pos: "phrase", ipa: "/pleɪ ˈdev.əlz ˈæd.və.kət/", zh: "唱反調 / 故意持反對意見激發討論", category: "Idioms & Expressions", def: "Argue against an idea just to stimulate debate or test validity.", exampleEn: "Allow me to play devil's advocate to stress-test your logic.", exampleZh: "容我唱個反調，來壓力測試一下你的論述邏輯。" },
+      { id: 85, word: "call it a day", pos: "phrase", ipa: "/kɑːl ɪt ə deɪ/", zh: "今天就先到此為止 / 收工", category: "Idioms & Expressions", def: "Stop working on something, especially for the rest of the day.", exampleEn: "We have accomplished a lot; let's call it a day.", exampleZh: "我們今天完成了許多事，就先收工休息吧。" },
+      { id: 86, word: "the elephant in the room", pos: "phrase", ipa: "/ðiː ˈel.ə.fənt ɪn ðə ruːm/", zh: "顯而易見卻被刻意忽視的問題", category: "Idioms & Expressions", def: "A major problem or controversial issue that is ignored because it is uncomfortable.", exampleEn: "Budget cuts were the obvious elephant in the room.", exampleZh: "預算縮減是房間裡那隻顯而易見卻沒人敢提的大象。" },
+      { id: 87, word: "see eye to eye", pos: "phrase", ipa: "/siː aɪ tuː aɪ/", zh: "看法完全一致", category: "Idioms & Expressions", def: "Be in full agreement with someone.", exampleEn: "The two partners don't always see eye to eye on hiring.", exampleZh: "兩位合夥人在招募人選上的看法並不總是完全一致。" },
+      { id: 88, word: "take with a grain of salt", pos: "phrase", ipa: "/teɪk wɪð ə ɡreɪn əv sɑːlt/", zh: "持保留態度 / 半信半疑", category: "Idioms & Expressions", def: "Regard something as exaggerated or not completely true.", exampleEn: "You should take online rumors with a grain of salt.", exampleZh: "你對網路謠言應該抱持保留與求證的態度。" },
+      { id: 89, word: "break the ice", pos: "phrase", ipa: "/breɪk ðiː aɪs/", zh: "打破僵局 / 熱絡氣氛", category: "Idioms & Expressions", def: "Do or say something to relieve tension or get conversation started.", exampleEn: "A fun warm-up game helped break the ice at the workshop.", exampleZh: "有趣的破冰暖身遊戲讓工作坊的氣氛瞬間熱絡起來。" },
+      { id: 90, word: "piece of cake", pos: "phrase", ipa: "/piːs əv keɪk/", zh: "輕而易舉的小事", category: "Idioms & Expressions", def: "Something very easy to do.", exampleEn: "Setting up the Wi-Fi router was a piece of cake.", exampleZh: "安裝這台無線路由器簡直是小事一樁。" },
+      { id: 91, word: "cost an arm and a leg", pos: "phrase", ipa: "/kɑːst ən ɑːrm ənd ə leɡ/", zh: "價格極其昂貴 / 索價不菲", category: "Idioms & Expressions", def: "Be extremely expensive.", exampleEn: "Fixing the transmission cost an arm and a leg.", exampleZh: "維修變速箱花了我一大筆錢，索價不菲。" },
+      { id: 92, word: "under the weather", pos: "phrase", ipa: "/ˈʌn.dɚ ðə ˈweð.ɚ/", zh: "身體微恙 / 不太舒服", category: "Idioms & Expressions", def: "Slightly unwell or in low spirits.", exampleEn: "I am feeling a bit under the weather today, so I stayed home.", exampleZh: "我今天感覺身體有點微恙不舒服，所以待在家休息。" },
+      { id: 93, word: "blessing in disguise", pos: "phrase", ipa: "/ˈbles.ɪŋ ɪn dɪsˈɡaɪz/", zh: "塞翁失馬焉知非福 / 因禍得福", category: "Idioms & Expressions", def: "An apparent misfortune that eventually results in something good.", exampleEn: "Missing that delayed flight turned out to be a blessing in disguise.", exampleZh: "錯過那班延誤的航班最後證實是因禍得福。" },
+      { id: 94, word: "rule of thumb", pos: "phrase", ipa: "/ruːl əv θʌm/", zh: "經驗法則", category: "Idioms & Expressions", def: "A broadly accurate guide or principle based on practice rather than theory.", exampleEn: "As a rule of thumb, save twenty percent of your salary.", exampleZh: "作為一項經驗法則，每月應將薪水的兩成存起來。" },
+      { id: 95, word: "cut to the chase", pos: "phrase", ipa: "/kʌt tuː ðə tʃeɪs/", zh: "切入正題 / 別拐彎抹角", category: "Idioms & Expressions", def: "Come directly to the important matter without waste of time.", exampleEn: "We have limited time, so let's cut to the chase.", exampleZh: "我們時間有限，直接切入正題吧。" },
+      { id: 96, word: "burn bridges", pos: "phrase", ipa: "/bɝːn ˈbrɪdʒ.ɪz/", zh: "自斷後路 / 撕破臉絕交", category: "Idioms & Expressions", def: "Destroy one's path or options, especially by alienating colleagues.", exampleEn: "Even if you dislike a job, avoid burning bridges when resigning.", exampleZh: "就算不喜歡工作，離職時也別和老東家撕破臉自斷後路。" },
+      { id: 97, word: "spill the beans", pos: "phrase", ipa: "/spɪl ðə biːnz/", zh: "洩漏秘密 / 說溜嘴", category: "Idioms & Expressions", def: "Reveal secret information unintentionally or prematurely.", exampleEn: "Don't spill the beans about the surprise anniversary party!", exampleZh: "千萬別說溜嘴把週年驚喜派對的秘密洩漏出去！" },
+      { id: 98, word: "in a nutshell", pos: "phrase", ipa: "/ɪn ə ˈnʌt.ʃel/", zh: "簡而言之 / 概括而言", category: "Idioms & Expressions", def: "In the fewest possible words; succinctly.", exampleEn: "In a nutshell, we exceeded our sales targets.", exampleZh: "簡而言之，我們的業績遠超原定目標。" },
+      { id: 99, word: "pull someone's leg", pos: "phrase", ipa: "/pʊl ˈsʌm.wʌnz leɡ/", zh: "開玩笑 / 逗弄某人", category: "Idioms & Expressions", def: "Deceive someone playfully or tease them.", exampleEn: "Don't be alarmed; he is just pulling your leg.", exampleZh: "別慌張，他只是在逗你開玩笑而已。" },
+      { id: 100, word: "hit the nail on the head", pos: "phrase", ipa: "/hɪt ðə neɪl ɑːn ðə hed/", zh: "一針見血 / 說中要害", category: "Idioms & Expressions", def: "Describe exactly what is causing a situation or problem.", exampleEn: "Her analysis of the market hit the nail on the head.", exampleZh: "她對市場現況的剖析可說是一針見血、切中要害。" }
+    ];
+
+    /* =====================================================================
+       2. FINITE STATE MACHINE & AUDIO LIFECYCLE MANAGEMENT
+       ===================================================================== */
+    const State = {
+      IDLE: 'IDLE',
+      PLAYING_AUDIO: 'PLAYING_AUDIO',
+      LISTENING: 'LISTENING',
+      EVALUATING: 'EVALUATING'
+    };
+
+    let currentState = State.IDLE;
+    let recognitionInstance = null;
+    let micWatchdogTimer = null;
+    let hasSpeechRecognition = false;
+    let selectedLang = 'en-US';
+
+    // State Machine Transition Guard
+    function setState(newState) {
+      currentState = newState;
+      updateUIForState();
+    }
+
+    function updateUIForState() {
+      const micBtn = document.getElementById('micButton');
+      const micIcon = document.getElementById('micIcon');
+      const stateInd = document.getElementById('stateIndicator');
+
+      if (!micBtn || !stateInd) return;
+
+      switch(currentState) {
+        case State.IDLE:
+          micBtn.classList.remove('bg-rose-500', 'mic-active-pulse');
+          micBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+          micIcon.className = 'ph-bold ph-microphone';
+          stateInd.textContent = '點擊麥克風大聲朗讀此單字';
+          stateInd.className = 'text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-600';
+          break;
+        case State.PLAYING_AUDIO:
+          micBtn.classList.remove('bg-rose-500', 'mic-active-pulse');
+          micBtn.classList.add('bg-slate-400');
+          micIcon.className = 'ph-bold ph-speaker-high animate-pulse';
+          stateInd.textContent = '語音播放中... 請稍候';
+          stateInd.className = 'text-xs font-bold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700';
+          break;
+        case State.LISTENING:
+          micBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700', 'bg-slate-400');
+          micBtn.classList.add('bg-rose-500', 'mic-active-pulse');
+          micIcon.className = 'ph-bold ph-waveform';
+          stateInd.textContent = '聆聽中... 請唸出單字 (3秒靜音自動停止)';
+          stateInd.className = 'text-xs font-bold px-3 py-1 rounded-full bg-rose-50 text-rose-600';
+          break;
+        case State.EVALUATING:
+          micBtn.classList.remove('mic-active-pulse', 'bg-rose-500');
+          micBtn.classList.add('bg-amber-500');
+          micIcon.className = 'ph-bold ph-circle-notch animate-spin';
+          stateInd.textContent = '比對判斷中...';
+          stateInd.className = 'text-xs font-bold px-3 py-1 rounded-full bg-amber-50 text-amber-700';
+          break;
+      }
+    }
+
+    /* Initialize Web Speech Recognition */
+    function initSpeechEngine() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        hasSpeechRecognition = true;
+        recognitionInstance = new SpeechRecognition();
+        recognitionInstance.continuous = false;
+        recognitionInstance.interimResults = false;
+        recognitionInstance.maxAlternatives = 5;
+        recognitionInstance.lang = selectedLang;
+
+        recognitionInstance.onstart = () => {
+          setState(State.LISTENING);
+          resetWatchdogTimer();
+        };
+
+        recognitionInstance.onresult = (event) => {
+          clearTimeout(micWatchdogTimer);
+          setState(State.EVALUATING);
+          handleRecognitionResult(event);
+        };
+
+        recognitionInstance.onerror = (event) => {
+          clearTimeout(micWatchdogTimer);
+          setState(State.IDLE);
+          console.warn('SpeechRecognition error:', event.error);
+          if (event.error === 'not-allowed') {
+            showModal('麥克風存取受限', '請確認已授權瀏覽器麥克風使用權限，或檢查是否在 HTTPS / localhost 安全環境下執行。', 'warning');
+          } else if (event.error === 'no-speech') {
+            showSpeechFeedback("未偵測到聲音", 0, false, "請靠近麥克風並大聲清晰朗讀。");
+          }
+        };
+
+        recognitionInstance.onend = () => {
+          clearTimeout(micWatchdogTimer);
+          if (currentState === State.LISTENING) {
+            setState(State.IDLE);
+          }
+        };
+      } else {
+        hasSpeechRecognition = false;
+        document.getElementById('compatBanner').classList.remove('hidden');
+      }
+    }
+
+    function resetWatchdogTimer() {
+      clearTimeout(micWatchdogTimer);
+      // Automatically stop recognition after 8s if user remains silent
+      micWatchdogTimer = setTimeout(() => {
+        if (currentState === State.LISTENING && recognitionInstance) {
+          try {
+            recognitionInstance.stop();
+          } catch (e) {}
+          setState(State.IDLE);
+        }
+      }, 8000);
+    }
+
+    /* =====================================================================
+       3. FUZZY MATCHING (LEVENSHTEIN DISTANCE & ACOUSTIC TOLERANCE)
+       ===================================================================== */
+    function normalizeText(str) {
+      if (!str) return '';
+      return str
+        .toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?'"“”‘’]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function calculateLevenshtein(a, b) {
+      const m = a.length;
+      const n = b.length;
+      if (m === 0) return n;
+      if (n === 0) return m;
+
+      const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+      for (let i = 0; i <= m; i++) dp[i][0] = i;
+      for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+      for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          dp[i][j] = Math.min(
+            dp[i - 1][j] + 1,      // deletion
+            dp[i][j - 1] + 1,      // insertion
+            dp[i - 1][j - 1] + cost // substitution
+          );
+        }
+      }
+      return dp[m][n];
+    }
+
+    function evaluateFuzzyMatch(transcriptList, targetWord) {
+      const cleanTarget = normalizeText(targetWord);
+      let bestScore = 0;
+      let bestCandidate = "";
+      let matchedPass = false;
+
+      for (const phrase of transcriptList) {
+        const cleanCandidate = normalizeText(phrase);
+        if (!cleanCandidate) continue;
+
+        // Exact match
+        if (cleanCandidate === cleanTarget) {
+          return { passed: true, score: 100, text: cleanCandidate };
+        }
+
+        // Substring / contained phrase match (helpful for phrases recognized inside sentences)
+        if (cleanCandidate.includes(cleanTarget) || cleanTarget.includes(cleanCandidate)) {
+          const ratio = Math.min(cleanCandidate.length, cleanTarget.length) / Math.max(cleanCandidate.length, cleanTarget.length);
+          if (ratio > 0.7) {
+            bestScore = Math.max(bestScore, Math.round(ratio * 95));
+            bestCandidate = cleanCandidate;
+            matchedPass = true;
+          }
+        }
+
+        // Levenshtein ratio
+        const dist = calculateLevenshtein(cleanCandidate, cleanTarget);
+        const maxLen = Math.max(cleanCandidate.length, cleanTarget.length);
+        const similarity = Math.max(0, Math.round((1 - dist / maxLen) * 100));
+
+        if (similarity > bestScore) {
+          bestScore = similarity;
+          bestCandidate = cleanCandidate;
+        }
+
+        // Lenient rule: If distance <= 1 or similarity >= 75%
+        if (dist <= 1 || similarity >= 75) {
+          matchedPass = true;
+        }
+      }
+
+      return {
+        passed: matchedPass || bestScore >= 75,
+        score: bestScore,
+        text: bestCandidate || transcriptList[0] || "(無法辨識)"
+      };
+    }
+
+    function handleRecognitionResult(event) {
+      const candidates = [];
+      const results = event.results[0];
+      for (let i = 0; i < results.length; i++) {
+        candidates.push(results[i].transcript);
+      }
+
+      const target = currentVocab.word;
+      const verdict = evaluateFuzzyMatch(candidates, target);
+
+      showSpeechFeedback(verdict.text, verdict.score, verdict.passed);
+      recordAttempt('speaking', target, verdict.text, verdict.score, verdict.passed);
+
+      if (verdict.passed) {
+        triggerConfettiMini();
+      }
+
+      setState(State.IDLE);
+    }
+
+    function showSpeechFeedback(text, score, isCorrect, note) {
+      const box = document.getElementById('speechFeedbackBox');
+      const textElem = document.getElementById('transcribedResultText');
+      const pill = document.getElementById('similarityPill');
+      const detail = document.getElementById('verdictDetailText');
+
+      box.classList.remove('hidden');
+      textElem.textContent = `"${text}"`;
+      pill.textContent = `相似度: ${score}%`;
+
+      if (isCorrect) {
+        pill.className = 'px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-100 text-emerald-800';
+        detail.innerHTML = `<span class="text-emerald-600 font-bold">✓ 判定發音正確！繼續保持！</span>`;
+      } else {
+        pill.className = 'px-2 py-0.5 rounded-md text-xs font-bold bg-rose-100 text-rose-800';
+        detail.innerHTML = `<span class="text-rose-600 font-bold">✗ 發音尚有落差</span> ${note || '可點擊上方發音按鈕多聽幾次後再次嘗試。'}`;
+      }
+    }
+
+    /* =====================================================================
+       4. TEXT-TO-SPEECH (TTS) CONTROLLER
+       ===================================================================== */
+    function playAudio(text, rate = 0.9) {
+      if (!('speechSynthesis' in window)) {
+        showModal('不支援語音播放', '您的瀏覽器不支援 SpeechSynthesis 語音合成。', 'warning');
+        return;
+      }
+
+      // Stop recognition immediately if mic is listening
+      if (currentState === State.LISTENING && recognitionInstance) {
+        try { recognitionInstance.stop(); } catch(e){}
+      }
+      window.speechSynthesis.cancel(); // Stop prior playback to avoid queuing delay
+
+      setState(State.PLAYING_AUDIO);
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = selectedLang;
+      utterance.rate = rate;
+      utterance.pitch = 1.0;
+
+      // Pick preferred native voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.lang.startsWith(selectedLang.slice(0, 2)) && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha')));
+      if (preferred) {
+        utterance.voice = preferred;
+      }
+
+      utterance.onend = () => {
+        setState(State.IDLE);
+      };
+
+      utterance.onerror = () => {
+        setState(State.IDLE);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function playCurrentWordAudio() {
+      if (!currentVocab) return;
+      playAudio(currentVocab.word, 0.9);
+    }
+
+    function playSentenceAudio() {
+      if (!currentVocab) return;
+      playAudio(currentVocab.exampleEn, 0.95);
+    }
+
+    function updateVoiceSettings() {
+      const select = document.getElementById('voiceAccentSelect');
+      selectedLang = select.value;
+      if (recognitionInstance) {
+        recognitionInstance.lang = selectedLang;
+      }
+    }
+
+    /* Mic Toggle Trigger */
+    function handleMicToggle() {
+      if (!hasSpeechRecognition) {
+        showModal('瀏覽器未支援語音辨識', '建議使用 Chrome 或 Edge 瀏覽器並確認麥克風已接妥。', 'warning');
+        return;
+      }
+
+      if (currentState === State.LISTENING) {
+        try { recognitionInstance.stop(); } catch(e){}
+        setState(State.IDLE);
+      } else {
+        // Enforce safe transition: always cancel TTS first
+        window.speechSynthesis.cancel();
+        try {
+          recognitionInstance.start();
+        } catch (err) {
+          console.warn('Error starting recognition:', err);
+          setState(State.IDLE);
+        }
+      }
+    }
+
+    /* =====================================================================
+       5. APPLICATION STATE & PRACTICE ENGINE
+       ===================================================================== */
+    let currentIndex = 0;
+    let currentVocab = VOCABULARY_DATA[0];
+    let practiceSubMode = 'speaking'; // 'speaking' | 'listening'
+
+    function renderPracticeCard() {
+      currentVocab = VOCABULARY_DATA[currentIndex];
+      
+      // Update counters
+      document.getElementById('currentIndexDisplay').textContent = currentIndex + 1;
+      document.getElementById('totalPracticeDisplay').textContent = VOCABULARY_DATA.length;
+      document.getElementById('currentCategoryBadge').textContent = currentVocab.category;
+
+      // Card Contents
+      document.getElementById('cardWord').textContent = currentVocab.word;
+      document.getElementById('cardPos').textContent = currentVocab.pos;
+      document.getElementById('cardIpa').textContent = currentVocab.ipa;
+      document.getElementById('cardTranslation').textContent = currentVocab.zh;
+      document.getElementById('cardDefinition').textContent = currentVocab.def;
+      document.getElementById('cardExampleEn').textContent = currentVocab.exampleEn;
+      document.getElementById('cardExampleZh').textContent = currentVocab.exampleZh;
+
+      // Reset speech feedback
+      document.getElementById('speechFeedbackBox').classList.add('hidden');
+      document.getElementById('listenVerdictBox').classList.add('hidden');
+
+      // Adjust views based on submode
+      if (practiceSubMode === 'speaking') {
+        document.getElementById('targetWordContainer').classList.remove('hidden');
+        document.getElementById('listenMaskContainer').classList.add('hidden');
+        document.getElementById('speakingInteractionBlock').classList.remove('hidden');
+        document.getElementById('listeningInteractionBlock').classList.add('hidden');
+      } else {
+        document.getElementById('targetWordContainer').classList.add('hidden');
+        document.getElementById('listenMaskContainer').classList.remove('hidden');
+        document.getElementById('speakingInteractionBlock').classList.add('hidden');
+        document.getElementById('listeningInteractionBlock').classList.remove('hidden');
+        setupListeningChoices();
+      }
+
+      setState(State.IDLE);
+    }
+
+    function setPracticeSubMode(mode) {
+      practiceSubMode = mode;
+      const spkBtn = document.getElementById('modeSpeakingBtn');
+      const lisBtn = document.getElementById('modeListeningBtn');
+
+      if (mode === 'speaking') {
+        spkBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white text-indigo-700 shadow-sm';
+        lisBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900';
+      } else {
+        lisBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white text-indigo-700 shadow-sm';
+        spkBtn.className = 'px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 hover:text-slate-900';
+      }
+
+      renderPracticeCard();
+    }
+
+    function setupListeningChoices() {
+      const container = document.getElementById('listenChoicesGrid');
+      container.innerHTML = '';
+      
+      // Pick 3 distractors from vocabulary
+      const distractors = VOCABULARY_DATA
+        .filter(item => item.id !== currentVocab.id)
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 3);
+
+      const options = [...distractors, currentVocab].sort(() => 0.5 - Math.random());
+
+      options.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = 'listen-choice-btn p-3.5 rounded-2xl border-2 border-slate-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50 text-left transition-all font-semibold text-slate-800 flex items-center justify-between group';
+        btn.innerHTML = `
+          <span>${item.word}</span>
+          <i class="ph-bold ph-arrow-right opacity-0 group-hover:opacity-100 text-indigo-600 transition-all"></i>
+        `;
+        btn.onclick = () => handleListeningChoice(btn, item);
+        container.appendChild(btn);
+      });
+    }
+
+    function handleListeningChoice(selectedButton, item) {
+      const isCorrect = item.id === currentVocab.id;
+      const allButtons = document.querySelectorAll('.listen-choice-btn');
+      allButtons.forEach(btn => btn.disabled = true);
+
+      const verdictBox = document.getElementById('listenVerdictBox');
+      verdictBox.classList.remove('hidden');
+
+      // Reveal word card after answering
+      document.getElementById('targetWordContainer').classList.remove('hidden');
+
+      if (isCorrect) {
+        selectedButton.classList.remove('bg-white', 'border-slate-200');
+        selectedButton.classList.add('bg-emerald-50', 'border-emerald-500', 'text-emerald-800');
+        verdictBox.className = 'text-sm font-bold text-center py-2 text-emerald-600';
+        verdictBox.textContent = `✓ 答對了！"${currentVocab.word}"：${currentVocab.zh}`;
+        triggerConfettiMini();
+      } else {
+        selectedButton.classList.remove('bg-white', 'border-slate-200');
+        selectedButton.classList.add('bg-rose-50', 'border-rose-500', 'text-rose-800');
+        verdictBox.className = 'text-sm font-bold text-center py-2 text-rose-600';
+        verdictBox.textContent = `✗ 答錯囉！正確答案是 "${currentVocab.word}"：${currentVocab.zh}`;
+      }
+
+      recordAttempt('listening', currentVocab.word, item.word, isCorrect ? 100 : 0, isCorrect);
+    }
+
+    function navigateCard(direction) {
+      window.speechSynthesis.cancel();
+      if (currentState === State.LISTENING && recognitionInstance) {
+        try { recognitionInstance.stop(); } catch(e){}
+      }
+
+      currentIndex += direction;
+      if (currentIndex < 0) currentIndex = VOCABULARY_DATA.length - 1;
+      if (currentIndex >= VOCABULARY_DATA.length) currentIndex = 0;
+
+      renderPracticeCard();
+    }
+
+    function randomizeCard() {
+      const newIdx = Math.floor(Math.random() * VOCABULARY_DATA.length);
+      currentIndex = newIdx;
+      renderPracticeCard();
+    }
+
+    /* =====================================================================
+       6. VOCABULARY LIST DIRECTORY VIEW (100 ITEMS)
+       ===================================================================== */
+    let currentCategoryFilter = 'ALL';
+
+    function renderVocabTable(items) {
+      const tbody = document.getElementById('vocabTableBody');
+      const emptyNotice = document.getElementById('noResultsNotice');
+      tbody.innerHTML = '';
+
+      if (items.length === 0) {
+        emptyNotice.classList.remove('hidden');
+        return;
+      }
+      emptyNotice.classList.add('hidden');
+
+      items.forEach((item) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/80 transition-colors group';
+        tr.innerHTML = `
+          <td class="py-3 px-4 text-center font-bold text-xs text-slate-400">${item.id}</td>
+          <td class="py-3 px-4">
+            <div class="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">${item.word}</div>
+            <span class="inline-block px-2 py-0.5 mt-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-500">${item.category}</span>
+          </td>
+          <td class="py-3 px-4 font-mono text-xs text-slate-500">${item.ipa}</td>
+          <td class="py-3 px-4">
+            <div class="font-semibold text-slate-800 text-sm">${item.zh}</div>
+            <div class="text-xs text-slate-400 mt-0.5 line-clamp-1">${item.def}</div>
+          </td>
+          <td class="py-3 px-4 text-xs text-slate-600 hidden lg:table-cell max-w-xs">
+            <div class="italic">"${item.exampleEn}"</div>
+            <div class="text-slate-400 text-[11px] mt-0.5">${item.exampleZh}</div>
+          </td>
+          <td class="py-3 px-4 text-center">
+            <div class="inline-flex items-center gap-1.5">
+              <button onclick="playAudio('${item.word.replace(/'/g, "\\'")}')" class="p-2 rounded-xl text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all" title="聽發音">
+                <i class="ph-bold ph-speaker-high text-lg"></i>
+              </button>
+              <button onclick="jumpToPracticeWord(${item.id})" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-indigo-600 hover:text-white text-xs font-bold transition-all" title="以此單字練習">
+                練習
+              </button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function filterVocabList() {
+      const query = document.getElementById('vocabSearchInput').value.toLowerCase().trim();
+      const filtered = VOCABULARY_DATA.filter(item => {
+        const matchesCategory = currentCategoryFilter === 'ALL' || item.category === currentCategoryFilter;
+        const matchesQuery = !query || 
+          item.word.toLowerCase().includes(query) ||
+          item.zh.toLowerCase().includes(query) ||
+          item.pos.toLowerCase().includes(query) ||
+          item.def.toLowerCase().includes(query);
+        return matchesCategory && matchesQuery;
+      });
+      renderVocabTable(filtered);
+    }
+
+    function setListCategoryFilter(cat) {
+      currentCategoryFilter = cat;
+      const pills = document.querySelectorAll('.category-pill');
+      pills.forEach(p => {
+        if (p.getAttribute('data-cat') === cat) {
+          p.className = 'category-pill active-cat px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-indigo-600 text-white';
+        } else {
+          p.className = 'category-pill px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-100 text-slate-600 hover:bg-slate-200';
+        }
+      });
+      filterVocabList();
+    }
+
+    function jumpToPracticeWord(id) {
+      const idx = VOCABULARY_DATA.findIndex(item => item.id === id);
+      if (idx !== -1) {
+        currentIndex = idx;
+        switchTab('practice');
+        renderPracticeCard();
+      }
+    }
+
+    /* =====================================================================
+       7. PERSISTENCE & STATISTICS REPORT
+       ===================================================================== */
+    const STATS_STORAGE_KEY = 'vocabflow_stats_v1';
+
+    function getStoredStats() {
+      try {
+        const raw = localStorage.getItem(STATS_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : { total: 0, correct: 0, incorrect: 0, streak: 0, history: [] };
+      } catch (e) {
+        return { total: 0, correct: 0, incorrect: 0, streak: 0, history: [] };
+      }
+    }
+
+    function saveStats(stats) {
+      try {
+        localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(stats));
+      } catch (e) {}
+    }
+
+    function recordAttempt(mode, target, input, score, isCorrect) {
+      const stats = getStoredStats();
+      stats.total += 1;
+      if (isCorrect) {
+        stats.correct += 1;
+        stats.streak += 1;
+      } else {
+        stats.incorrect += 1;
+        stats.streak = 0;
+      }
+
+      // Add to history top
+      stats.history.unshift({
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        mode: mode === 'speaking' ? '口說朗讀' : '聽力測驗',
+        target,
+        input: input || '(無)',
+        score,
+        isCorrect
+      });
+
+      // Keep recent 60 items
+      if (stats.history.length > 60) stats.history.pop();
+
+      saveStats(stats);
+      updateStatsDisplay();
+    }
+
+    function updateStatsDisplay() {
+      const stats = getStoredStats();
+      const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+
+      // Mini bar on practice tab
+      document.getElementById('statCorrectMini').textContent = stats.correct;
+      document.getElementById('statAccuracyMini').textContent = `${accuracy}%`;
+      document.getElementById('statStreakMini').textContent = stats.streak;
+
+      // Stats Report Tab
+      document.getElementById('statReportTotal').textContent = stats.total;
+      document.getElementById('statReportCorrect').textContent = stats.correct;
+      document.getElementById('statReportIncorrect').textContent = stats.incorrect;
+      document.getElementById('statReportAccuracy').textContent = `${accuracy}%`;
+
+      // Render history rows
+      const tbody = document.getElementById('historyTableBody');
+      const emptyHistory = document.getElementById('noHistoryNotice');
+      tbody.innerHTML = '';
+
+      if (stats.history.length === 0) {
+        emptyHistory.classList.remove('hidden');
+        return;
+      }
+      emptyHistory.classList.add('hidden');
+
+      stats.history.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 text-xs sm:text-sm';
+        tr.innerHTML = `
+          <td class="py-2.5 px-4 text-slate-400 font-mono">${item.time}</td>
+          <td class="py-2.5 px-4 font-semibold text-slate-600">${item.mode}</td>
+          <td class="py-2.5 px-4 font-bold text-slate-900">${item.target}</td>
+          <td class="py-2.5 px-4 text-slate-700 font-mono">${item.input}</td>
+          <td class="py-2.5 px-4 font-semibold">${item.score}%</td>
+          <td class="py-2.5 px-4 text-center">
+            ${item.isCorrect 
+              ? '<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">通過</span>'
+              : '<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">待複習</span>'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function resetStatsHistory() {
+      if (window.confirm("確定要重置所有練習次數與學習紀錄嗎？")) {
+        localStorage.removeItem(STATS_STORAGE_KEY);
+        updateStatsDisplay();
+      }
+    }
+
+    /* =====================================================================
+       8. TAB SWITCHING, MODAL & UTILITIES
+       ===================================================================== */
+    function switchTab(tabId) {
+      const views = ['viewPractice', 'viewList', 'viewStats'];
+      views.forEach(v => {
+        document.getElementById(v).classList.add('hidden');
+      });
+
+      const navBtns = ['tabBtnPractice', 'tabBtnList', 'tabBtnStats'];
+      navBtns.forEach(b => {
+        const btn = document.getElementById(b);
+        btn.className = 'px-3.5 sm:px-4 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 text-slate-600 hover:text-slate-900';
+      });
+
+      if (tabId === 'practice') {
+        document.getElementById('viewPractice').classList.remove('hidden');
+        document.getElementById('tabBtnPractice').className = 'px-3.5 sm:px-4 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 bg-white text-indigo-700 shadow-sm';
+      } else if (tabId === 'list') {
+        document.getElementById('viewList').classList.remove('hidden');
+        document.getElementById('tabBtnList').className = 'px-3.5 sm:px-4 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 bg-white text-indigo-700 shadow-sm';
+        filterVocabList();
+      } else if (tabId === 'stats') {
+        document.getElementById('viewStats').classList.remove('hidden');
+        document.getElementById('tabBtnStats').className = 'px-3.5 sm:px-4 py-1.5 rounded-lg transition-all duration-200 flex items-center gap-1.5 bg-white text-indigo-700 shadow-sm';
+        updateStatsDisplay();
+      }
+    }
+
+    function showModal(title, msg, type = 'info') {
+      const modal = document.getElementById('appModal');
+      const titleElem = document.getElementById('modalTitle');
+      const msgElem = document.getElementById('modalMsg');
+      const icon = document.getElementById('modalIcon');
+      const iconBox = document.getElementById('modalIconContainer');
+
+      titleElem.textContent = title;
+      msgElem.textContent = msg;
+
+      if (type === 'warning') {
+        iconBox.className = 'w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl bg-amber-100 text-amber-600';
+        icon.className = 'ph-bold ph-warning';
+      } else {
+        iconBox.className = 'w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl bg-indigo-100 text-indigo-600';
+        icon.className = 'ph-bold ph-info';
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('appModal').classList.add('hidden');
+    }
+
+    function triggerConfettiMini() {
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 40,
+          spread: 60,
+          origin: { y: 0.75 },
+          colors: ['#4f46e5', '#10b981', '#f59e0b', '#ec4899']
+        });
+      }
+    }
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      // Don't trigger shortcuts if user is typing in search
+      if (e.target.tagName === 'INPUT') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        playCurrentWordAudio();
+      } else if (e.code === 'Enter') {
+        e.preventDefault();
+        navigateCard(1);
+      }
+    });
+
+    /* =====================================================================
+       INITIALIZATION ON LOAD
+       ===================================================================== */
+    window.onload = function() {
+      initSpeechEngine();
+      renderPracticeCard();
+      renderVocabTable(VOCABULARY_DATA);
+      updateStatsDisplay();
+
+      // Populate voice options after browser loads synthesis voices
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          updateVoiceSettings();
+        };
+      }
+    };
+  </script>
+</body>
+</html>
